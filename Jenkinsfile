@@ -7,7 +7,7 @@ node{
         app = docker.build("crnogoracmilos/test")
     }
     stage('Testiranje slike'){
-        app.inside{
+        app.inside("--entrypoint=''"){
             sh 'echo "Test je prosao" '
         }
     }
