@@ -1,4 +1,4 @@
-name: Prvi pipeline upgrade
+name: Pipeline sa hadolint-om i trivy-jem
 
 on:
   push:
@@ -44,3 +44,12 @@ jobs:
            ${{ secrets.DOCKERHUB_USERNAME }}/test:${{ steps.get_version.outputs.VERSION }}
            ${{ secrets.DOCKERHUB_USERNAME }}/test:latest
          labels: ${{ steps.meta.outputs.labels }}
+      - name: Skeniranje Docker slike preko trivy-ja
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/test:latest'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
