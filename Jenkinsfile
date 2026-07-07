@@ -12,7 +12,7 @@ node{
         }
     }
     stage('Izbacujemo sliku'){
-        docker.withRegistry('https://registry.hub.docker.com', 'a47509ad-a441-4b79-beb7-15ecb957af29') {
+        docker.withRegistry('https://registry.hub.docker.com', 'docker-tajna') {
                app.push("${env.BUILD_NUMBER}")
                app.push("latest")
         }
