@@ -1,4 +1,4 @@
- name: Automatizacija Docker Build-a
+name: Prvi Pipeline
 
 on:
   push:
@@ -19,8 +19,8 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build i Push Docker slike
-        uses: docker/build-push-actions@v6
+        uses: docker/build-push-action@v6
         with:
-         context:
+         context: .
          push: true
          tags: ${{ secrets.DOCKERHUB_USERNAME }}/test:latest
