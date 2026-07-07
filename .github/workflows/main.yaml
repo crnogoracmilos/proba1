@@ -3,53 +3,112 @@ name: Pipeline sa hadolint-om i trivy-jem
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
 #Ovaj deo predstavlja okidač pipeline-a, odnosno govori šta je potrebno uraditi
 jobs:
-  docker-build-push:
+  lint-dockerfile:
+    name: Hadolint Dockerfile-a
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preuzimamo kod
+        uses: actions/checkout@v4
+      - name: Provera Dockerfile-a preko Hadolinta
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ./Dockerfile
+          config: .hadolint.yaml
+          format: tty
+
+  testiranje:
+    name: Build slike i testovi
+    needs: lint-dockerfile
     runs-on: ubuntu-latest
     steps:
       - name: Skidanje koda
         uses: actions/checkout@v4
 
-      - name: Provera Dockerfile-a preko Hadolinta
-        uses: hadolint/hadolint-action@v3.1.0
+      - name: Podesavamo Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Kreiranje testa
+        uses: docker/build-push-action@v6
         with:
-          dockerfile: ./Dockerfile
-          format: tty
+          context: .
+          push: false
+          outputs: type=cacheonly
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+  build-scan-push:
+    name: Buildovanje slike, Trivy, tag i push
+    needs: testiranje
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/test
+    steps:
+      - name: Skidanje koda
+        uses: actions/checkout@v4
+
+      - name: Podesavamo Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Izvlačenje verzije iz pom.xml
         id: get_version
         run: echo "VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_OUTPUT
 
+      - name: Generisanje kratkog SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy sken (SARIF)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Trivy blokiranje
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          ignore-unfixed: true
+
       - name: Docker login
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Ekstraktovanje meta data za Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/test
-
-      - name: Build i Push Docker slike
-        id: push
-        uses: docker/build-push-action@v6
-        with:
-         context: .
-         file: ./Dockerfile
-         push: true
-         tags: |
-           ${{ secrets.DOCKERHUB_USERNAME }}/test:${{ steps.get_version.outputs.VERSION }}
-           ${{ secrets.DOCKERHUB_USERNAME }}/test:latest
-         labels: ${{ steps.meta.outputs.labels }}
-      - name: Skeniranje Docker slike preko trivy-ja
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/test:latest'
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+      - name: Push slike na Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker tag ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }} ${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.sha_short }}
+          docker tag ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }} ${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}
+          docker push ${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.sha_short }}
+          docker push ${{ env.IMAGE_NAME }}:latest
