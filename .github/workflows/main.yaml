@@ -13,6 +13,12 @@ jobs:
       - name: Skidanje koda
         uses: actions/checkout@v4
 
+      - name: Provera Dockerfile-a preko Hadolinta
+        uses: hadolint/halodint-action@v3.1.0
+        with:
+          dockerfile: ./Dockerfile
+          format: tty
+
       - name: Izvlačenje verzije iz pom.xml
         id: get_version
         run: echo "VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_OUTPUT
