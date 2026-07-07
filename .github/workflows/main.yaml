@@ -1,4 +1,4 @@
-name: Prvi Pipeline
+name: Prvi pipeline upgrade
 
 on:
   push:
@@ -8,9 +8,14 @@ jobs:
   docker-build-push:
     runs-on: ubuntu-latest
 
+
     steps:
       - name: Skidanje koda
         uses: actions/checkout@v4
+
+      - name: Izvlačenje verzije iz pom.xml
+        id: get_version
+        run: echo "VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_OUTPUT
 
       - name: Docker login
         uses: docker/login-action@v3
@@ -18,9 +23,20 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Ekstraktovanje meta data za Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/test
+
       - name: Build i Push Docker slike
+        id: push
         uses: docker/build-push-action@v6
         with:
          context: .
+         file: ./Dockerfile
          push: true
-         tags: ${{ secrets.DOCKERHUB_USERNAME }}/test:latest
+         tags: |
+           ${{ secrets.DOCKERHUB_USERNAME }}/test:${{ steps.get_version.outputs.VERSION }}
+           ${{ secrets.DOCKERHUB_USERNAME }}/test:latest
+         labels: ${{ steps.meta.outputs.labels }}
