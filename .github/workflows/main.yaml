@@ -7,14 +7,12 @@ on:
 jobs:
   docker-build-push:
     runs-on: ubuntu-latest
-
-
     steps:
       - name: Skidanje koda
         uses: actions/checkout@v4
 
       - name: Provera Dockerfile-a preko Hadolinta
-        uses: hadolint/halodint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: ./Dockerfile
           format: tty
