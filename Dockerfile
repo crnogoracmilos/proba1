@@ -5,11 +5,13 @@ RUN mvn dependency:go-offline
 COPY src ./src
 RUN mvn clean package -DskipTests
 
-#mora na oba java17 zbog springboot-a
-
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 RUN apk update && apk upgrade
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY --from=builder /app/target/*.jar app.jar
+USER appuser
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
+
+
