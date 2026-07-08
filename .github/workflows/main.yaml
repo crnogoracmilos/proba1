@@ -49,7 +49,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/test
     steps:
-      - name: Skidanje koda
+      - name: Skidanje kodag
         uses: actions/checkout@v4
 
       - name: Podesavamo Docker Buildx
